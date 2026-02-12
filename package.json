@@ -1,7 +1,7 @@
 {
-  "name": "@chocbite/ts-lib-base",
+  "name": "@chocbite/ts-lib-icons",
   "version": "1.0.2",
-  "description": "Base ui library for TypeScript",
+  "description": "Icon library for TypeScript",
   "author": "chocolateandmilkwin",
   "license": "MIT",
   "type": "module",
@@ -17,20 +17,22 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts",
       "style": "./dist/index.css"
-    }
+    },
+    "./mixins": "./dist/mixins.scss"
   },
   "files": [
     "dist"
   ],
   "scripts": {
     "dev": "vite --port 9951",
-    "build": "tsup src/index.ts --format esm --dts",
+    "build": "tsup src/index.ts --format esm --dts && cpy src/mixins.scss dist/mixins.scss",
     "lint": "eslint src/**/*.ts",
     "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@vitest/browser-playwright": "^4.0.0",
+    "cpy-cli": "^7.0.0",
     "esbuild-sass-plugin": "^3.6.0",
     "eslint": "^9.0.0",
     "sass": "^1.97.3",
@@ -42,8 +44,6 @@
   },
   "dependencies": {
     "@chocbite/ts-lib-common": "^1.0.0",
-    "@chocbite/ts-lib-event": "^1.0.0",
-    "@chocbite/ts-lib-result": "^1.0.0",
-    "@chocbite/ts-lib-state": "^1.0.0"
+    "@chocbite/ts-lib-svg": "^1.0.1"
   }
 }

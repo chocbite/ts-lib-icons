@@ -4,16 +4,3 @@
   font-weight: 400;
   src: url("./font/Material-Rounded.woff2") format("woff2");
 }
-
-@mixin material-symbols-rounded {
-  font-family: "Material Symbols Rounded";
-  font-weight: normal;
-  font-style: normal;
-  letter-spacing: normal;
-  text-transform: none;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-feature-settings: "liga";
-  -webkit-font-smoothing: antialiased;
-}

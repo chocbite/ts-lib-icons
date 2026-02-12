@@ -17,10 +17,13 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts",
       "style": "./dist/index.css"
-    }
+    },
+    "./font.scss": "./src/font.scss"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/font.scss",
+    "src/font"
   ],
   "scripts": {
     "dev": "vite --port 9951",

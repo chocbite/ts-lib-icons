@@ -6,7 +6,8 @@ export default defineConfig({
   format: ["cjs", "esm"],
   dts: true,
   outDir: "dist",
+  clean: true,
   banner: { js: "import './index.css';" },
   esbuildPlugins: [sassPlugin()],
-  onSuccess: "cp src/font.scss dist/font.scss && cp -r src/font dist/font",
+  onSuccess: "cp src/font.scss dist/font.scss && cp -r src/font dist/",
 });

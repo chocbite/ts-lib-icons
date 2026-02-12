@@ -25,7 +25,7 @@
   ],
   "scripts": {
     "dev": "vite --port 9951",
-    "build": "tsup src/index.ts --format esm --dts",
+    "build": "tsup",
     "lint": "eslint src/**/*.ts",
     "test": "vitest run",
     "prepublishOnly": "npm run build"

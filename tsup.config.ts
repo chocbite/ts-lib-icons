@@ -8,4 +8,5 @@ export default defineConfig({
   outDir: "dist",
   banner: { js: "import './index.css';" },
   esbuildPlugins: [sassPlugin()],
+  onSuccess: "cp src/font.scss dist/font.scss && cp -r src/font dist/font",
 });

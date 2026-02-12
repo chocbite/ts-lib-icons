@@ -18,12 +18,10 @@
       "types": "./dist/index.d.ts",
       "style": "./dist/index.css"
     },
-    "./font.scss": "./src/font.scss"
+    "./font.scss": "./dist/font.scss"
   },
   "files": [
-    "dist",
-    "src/font.scss",
-    "src/font"
+    "dist"
   ],
   "scripts": {
     "dev": "vite --port 9951",

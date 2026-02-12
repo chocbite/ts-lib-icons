@@ -1,0 +1,39 @@
+{
+  "name": "@chocbite/ts-lib-result",
+  "version": "1.0.0",
+  "description": "Rust like result type for TypeScript",
+  "author": "chocolateandmilkwin",
+  "license": "MIT",
+  "type": "module",
+  "private": false,
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite --port 9951",
+    "build": "tsup src/index.ts --format esm --dts",
+    "lint": "eslint src/**/*.ts",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "tsup": "^8.0.0",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.0",
+    "eslint": "^9.0.0",
+    "typescript-eslint": "^8.0.0",
+    "@vitest/browser-playwright": "^4.0.0"
+  }
+}

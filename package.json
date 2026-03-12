@@ -31,6 +31,7 @@
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
+    "@material-icons/svg": "^1.0.33",
     "@vitest/browser-playwright": "^4.0.0",
     "cpy-cli": "^7.0.0",
     "esbuild-sass-plugin": "^3.6.0",

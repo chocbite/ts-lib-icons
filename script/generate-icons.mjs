@@ -6,7 +6,7 @@
  * google/material-design-icons repository and generates one TypeScript
  * file under src/material/ containing the default 24px symbols only
  * (fill 0, grade 0, weight 400).
- * Also rewrites src/index.ts.
+ * Also rewrites src/index.ts and src/trials.ts.
  *
  * Usage:
  *   node script/generate-icons.mjs
@@ -38,12 +38,9 @@ const indexPath = join(rootDir, "src", "index.ts");
 const trialsPath = join(rootDir, "src", "trials.ts");
 
 const REPO_URL = "https://github.com/google/material-design-icons.git";
-const SYMBOLS_TREE = "symbols/web";
 const VARIANT = "materialsymbolsrounded";
 const SIZE = "24px";
-const DEFAULT_SYMBOL_REGEX = new RegExp(
-  String.raw`^symbols/web/([^/]+)/${VARIANT}/\1_${SIZE}\.svg$`,
-);
+const sparsePattern = `symbols/web/*/${VARIANT}/*_${SIZE}.svg`;
 
 const tmpCloneDir = mkdtempSync(join(tmpdir(), "material-design-icons-"));
 
@@ -57,56 +54,40 @@ try {
       "1",
       "--no-tags",
       "--filter=blob:none",
-      "--no-checkout",
+      "--sparse",
       REPO_URL,
       tmpCloneDir,
     ],
     { stdio: "inherit" },
   );
 
-  const trackedFilesOutput = execFileSync(
+  console.log("Checking out rounded 24px Material Symbols...");
+  execFileSync(
     "git",
-    ["-C", tmpCloneDir, "ls-tree", "-r", "--name-only", "HEAD", "--", SYMBOLS_TREE],
-    {
-      encoding: "utf8",
-      maxBuffer: 128 * 1024 * 1024,
-    },
+    ["-C", tmpCloneDir, "sparse-checkout", "set", "--no-cone", sparsePattern],
+    { stdio: "inherit" },
   );
 
-  const symbols = trackedFilesOutput
-    .split("\n")
-    .map((path) => path.trim())
-    .filter(Boolean)
-    .map((path) => {
-      const match = path.match(DEFAULT_SYMBOL_REGEX);
-      if (!match) return null;
-      return {
-        path,
-        iconName: match[1],
-      };
-    })
-    .filter((entry) => entry !== null)
+  const symbolsDir = join(tmpCloneDir, "symbols", "web");
+  if (!existsSync(symbolsDir)) {
+    throw new Error("symbols/web was not checked out successfully.");
+  }
+
+  const symbols = readdirSync(symbolsDir)
+    .map((iconName) => ({
+      iconName,
+      svgPath: join(symbolsDir, iconName, VARIANT, `${iconName}_${SIZE}.svg`),
+    }))
+    .filter(({ svgPath }) => existsSync(svgPath))
     .sort((a, b) => a.iconName.localeCompare(b.iconName));
 
   if (symbols.length === 0) {
     throw new Error("No default rounded 24px Material Symbols were found.");
   }
 
-  console.log(`Checking out ${symbols.length} matching symbol SVGs...`);
-  execFileSync(
-    "git",
-    ["-C", tmpCloneDir, "checkout-index", "--force", "--stdin"],
-    {
-      input: symbols.map(({ path }) => path).join("\n"),
-      encoding: "utf8",
-      stdio: ["pipe", "inherit", "inherit"],
-    },
-  );
-
   const lines = [`import { generate_function } from "../shared";`, ``];
 
-  for (const { path, iconName } of symbols) {
-    const svgPath = join(tmpCloneDir, path);
+  for (const { iconName, svgPath } of symbols) {
     const svgContent = readFileSync(svgPath, "utf-8").trim();
     const varName = `material_${iconName}_rounded`;
 

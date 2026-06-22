@@ -2,68 +2,71 @@
 /**
  * generate-icons.mjs
  *
- * Reads Google Material Icons (rounded variant) from the @material-icons/svg
- * package and generates one TypeScript file per category under src/material/.
+ * Fetches Google Material Icons (rounded variant) from the official
+ * google/material-design-icons repository and generates one TypeScript
+ * file per category under src/material/.
  * Also rewrites src/index.ts to export every generated category file.
  *
  * Usage:
  *   node script/generate-icons.mjs
  *
  * Prerequisites:
- *   npm install   (installs @material-icons/svg devDependency)
+ *   git (must be available in PATH)
  */
 
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, rmSync, readdirSync, statSync, unlinkSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { execSync } from "child_process";
+import { tmpdir } from "os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");
 
 // ---------------------------------------------------------------------------
-// Paths inside the @material-icons/svg package
+// Clone the official Google Material Design Icons repository
 // ---------------------------------------------------------------------------
-const pkgDataPath = join(
-  rootDir,
-  "node_modules/@material-icons/svg/data.json",
-);
-const pkgSvgDir = join(rootDir, "node_modules/@material-icons/svg/svg");
+const REPO_URL = "https://github.com/google/material-design-icons.git";
+const VARIANT = "materialiconsround";
+const SVG_FILE = "24px.svg";
 
-if (!existsSync(pkgDataPath)) {
-  console.error(
-    "Error: @material-icons/svg is not installed.\n" +
-      "Run `npm install` from the repository root first.",
-  );
+const tmpCloneDir = join(tmpdir(), "material-design-icons-generate");
+
+if (existsSync(tmpCloneDir)) {
+  console.log("Removing previous temporary clone...");
+  rmSync(tmpCloneDir, { recursive: true, force: true });
+}
+
+console.log("Cloning google/material-design-icons (sparse, src/ only)...");
+execSync(
+  `git clone --depth 1 --no-tags --filter=blob:none --sparse "${REPO_URL}" "${tmpCloneDir}"`,
+  { stdio: "inherit" },
+);
+execSync(`git sparse-checkout set src`, { cwd: tmpCloneDir, stdio: "pipe" });
+
+const srcDir = join(tmpCloneDir, "src");
+
+if (!existsSync(srcDir)) {
+  console.error("Error: sparse checkout of src/ failed.");
   process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
-// Load icon metadata
-// ---------------------------------------------------------------------------
-const data = JSON.parse(readFileSync(pkgDataPath, "utf-8"));
-
-/** @type {{ name: string; categories: string[] }[]} */
-const icons = data.icons;
-
-// ---------------------------------------------------------------------------
-// Build a category → sorted icon names map
+// Walk directory to build a category → sorted icon names map
 // ---------------------------------------------------------------------------
 
 /** @type {Map<string, string[]>} */
 const categoryIcons = new Map();
 
-for (const icon of icons) {
-  for (const cat of icon.categories ?? []) {
-    if (!categoryIcons.has(cat)) {
-      categoryIcons.set(cat, []);
-    }
-    categoryIcons.get(cat).push(icon.name);
-  }
-}
+for (const category of readdirSync(srcDir).sort()) {
+  const catDir = join(srcDir, category);
+  if (!statSync(catDir).isDirectory()) continue;
 
-// Sort icon names within each category for a stable, deterministic output
-for (const names of categoryIcons.values()) {
-  names.sort();
+  const iconNames = readdirSync(catDir)
+    .filter((entry) => statSync(join(catDir, entry)).isDirectory())
+    .sort();
+
+  categoryIcons.set(category, iconNames);
 }
 
 // ---------------------------------------------------------------------------
@@ -80,17 +83,17 @@ for (const [category, iconNames] of [...categoryIcons.entries()].sort(
   let count = 0;
 
   for (const iconName of iconNames) {
-    const svgPath = join(pkgSvgDir, iconName, "round.svg");
+    const svgPath = join(srcDir, category, iconName, VARIANT, SVG_FILE);
 
     if (!existsSync(svgPath)) {
       console.warn(
-        `  [warn] round.svg not found for "${iconName}" (${category}) – skipped`,
+        `  [warn] ${VARIANT}/${SVG_FILE} not found for "${iconName}" (${category}) – skipped`,
       );
       totalSkipped++;
       continue;
     }
 
-    // The SVG files are already single-line; trim just in case
+    // The SVG files are single-line; trim just in case
     const svgContent = readFileSync(svgPath, "utf-8").trim();
     const varName = `material_${category}_${iconName}_rounded`;
 
@@ -116,6 +119,21 @@ for (const [category, iconNames] of [...categoryIcons.entries()].sort(
 }
 
 // ---------------------------------------------------------------------------
+// Remove stale category files no longer present in the official source
+// ---------------------------------------------------------------------------
+const materialDir = join(rootDir, "src", "material");
+const activeFiles = new Set(
+  generatedCategories.map((cat) => `material-${cat}.ts`),
+);
+
+for (const file of readdirSync(materialDir)) {
+  if (file.startsWith("material-") && file.endsWith(".ts") && !activeFiles.has(file)) {
+    unlinkSync(join(materialDir, file));
+    console.log(`Removed stale file: src/material/${file}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Rewrite src/index.ts
 // ---------------------------------------------------------------------------
 const indexLines = generatedCategories.map(
@@ -127,6 +145,12 @@ indexLines.push(``);
 const indexPath = join(rootDir, "src", "index.ts");
 writeFileSync(indexPath, indexLines.join("\n"), "utf-8");
 console.log(`\nUpdated src/index.ts (${generatedCategories.length} categories)`);
+
+// ---------------------------------------------------------------------------
+// Clean up temporary clone
+// ---------------------------------------------------------------------------
+rmSync(tmpCloneDir, { recursive: true, force: true });
+console.log("Cleaned up temporary clone.");
 
 // ---------------------------------------------------------------------------
 // Summary

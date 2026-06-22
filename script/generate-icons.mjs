@@ -67,7 +67,10 @@ try {
   const trackedFilesOutput = execFileSync(
     "git",
     ["-C", tmpCloneDir, "ls-tree", "-r", "--name-only", "HEAD", "--", SYMBOLS_TREE],
-    { encoding: "utf8" },
+    {
+      encoding: "utf8",
+      maxBuffer: 128 * 1024 * 1024,
+    },
   );
 
   const symbols = trackedFilesOutput

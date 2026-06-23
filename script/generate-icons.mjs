@@ -2,137 +2,155 @@
 /**
  * generate-icons.mjs
  *
- * Reads Google Material Icons (rounded variant) from the @material-icons/svg
- * package and generates one TypeScript file per category under src/material/.
- * Also rewrites src/index.ts to export every generated category file.
+ * Fetches Google Material Symbols (rounded variant) from the official
+ * google/material-design-icons repository and generates one TypeScript
+ * file under src/material/ containing the default 24px symbols only
+ * (fill 0, grade 0, weight 400).
+ * Also rewrites src/index.ts and src/trials.ts.
  *
  * Usage:
  *   node script/generate-icons.mjs
  *
  * Prerequisites:
- *   npm install   (installs @material-icons/svg devDependency)
+ *   git (must be available in PATH)
  */
 
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join, dirname } from "path";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "fs";
+import { execFileSync } from "child_process";
+import { dirname, join } from "path";
+import { tmpdir } from "os";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");
+const materialDir = join(rootDir, "src", "material");
+const outputFileName = "material-symbols-rounded.ts";
+const outputPath = join(materialDir, outputFileName);
+const indexPath = join(rootDir, "src", "index.ts");
+const trialsPath = join(rootDir, "src", "trials.ts");
 
-// ---------------------------------------------------------------------------
-// Paths inside the @material-icons/svg package
-// ---------------------------------------------------------------------------
-const pkgDataPath = join(
-  rootDir,
-  "node_modules/@material-icons/svg/data.json",
-);
-const pkgSvgDir = join(rootDir, "node_modules/@material-icons/svg/svg");
+const REPO_URL = "https://github.com/google/material-design-icons.git";
+const VARIANT = "materialsymbolsrounded";
+const SIZE = "24px";
+const sparsePattern = `symbols/web/*/${VARIANT}/*_${SIZE}.svg`;
 
-if (!existsSync(pkgDataPath)) {
-  console.error(
-    "Error: @material-icons/svg is not installed.\n" +
-      "Run `npm install` from the repository root first.",
+const tmpCloneDir = mkdtempSync(join(tmpdir(), "material-design-icons-"));
+
+try {
+  console.log("Cloning google/material-design-icons...");
+  execFileSync(
+    "git",
+    [
+      "clone",
+      "--depth",
+      "1",
+      "--no-tags",
+      "--filter=blob:none",
+      "--sparse",
+      REPO_URL,
+      tmpCloneDir,
+    ],
+    { stdio: "inherit" },
   );
-  process.exit(1);
-}
 
-// ---------------------------------------------------------------------------
-// Load icon metadata
-// ---------------------------------------------------------------------------
-const data = JSON.parse(readFileSync(pkgDataPath, "utf-8"));
+  console.log("Checking out rounded 24px Material Symbols...");
+  execFileSync(
+    "git",
+    ["-C", tmpCloneDir, "sparse-checkout", "set", "--no-cone", sparsePattern],
+    { stdio: "inherit" },
+  );
 
-/** @type {{ name: string; categories: string[] }[]} */
-const icons = data.icons;
-
-// ---------------------------------------------------------------------------
-// Build a category → sorted icon names map
-// ---------------------------------------------------------------------------
-
-/** @type {Map<string, string[]>} */
-const categoryIcons = new Map();
-
-for (const icon of icons) {
-  for (const cat of icon.categories ?? []) {
-    if (!categoryIcons.has(cat)) {
-      categoryIcons.set(cat, []);
-    }
-    categoryIcons.get(cat).push(icon.name);
+  const symbolsDir = join(tmpCloneDir, "symbols", "web");
+  if (!existsSync(symbolsDir)) {
+    throw new Error("symbols/web was not checked out successfully.");
   }
-}
 
-// Sort icon names within each category for a stable, deterministic output
-for (const names of categoryIcons.values()) {
-  names.sort();
-}
+  const symbols = readdirSync(symbolsDir)
+    .map((iconName) => ({
+      iconName,
+      svgPath: join(symbolsDir, iconName, VARIANT, `${iconName}_${SIZE}.svg`),
+    }))
+    .filter(({ svgPath }) => existsSync(svgPath))
+    .sort((a, b) => a.iconName.localeCompare(b.iconName));
 
-// ---------------------------------------------------------------------------
-// Generate one TypeScript file per category
-// ---------------------------------------------------------------------------
-const generatedCategories = [];
-let totalIcons = 0;
-let totalSkipped = 0;
+  if (symbols.length === 0) {
+    throw new Error("No default rounded 24px Material Symbols were found.");
+  }
 
-for (const [category, iconNames] of [...categoryIcons.entries()].sort(
-  ([a], [b]) => a.localeCompare(b),
-)) {
   const lines = [`import { generate_function } from "../shared";`, ``];
-  let count = 0;
 
-  for (const iconName of iconNames) {
-    const svgPath = join(pkgSvgDir, iconName, "round.svg");
-
-    if (!existsSync(svgPath)) {
-      console.warn(
-        `  [warn] round.svg not found for "${iconName}" (${category}) – skipped`,
-      );
-      totalSkipped++;
-      continue;
-    }
-
-    // The SVG files are already single-line; trim just in case
+  for (const { iconName, svgPath } of symbols) {
     const svgContent = readFileSync(svgPath, "utf-8").trim();
-    const varName = `material_${category}_${iconName}_rounded`;
+    const varName = `material_${iconName}_rounded`;
 
     lines.push(`//Generates ${iconName} icon`);
     lines.push(`export const ${varName} = generate_function(`);
-    lines.push(`  "${varName}",`);
-    lines.push(`  '${svgContent}',`);
+    lines.push(`  ${JSON.stringify(varName)},`);
+    lines.push(`  ${JSON.stringify(svgContent)},`);
     lines.push(`);`);
-    lines.push(``);
-    count++;
+    lines.push("");
   }
 
-  const outputPath = join(
-    rootDir,
-    "src",
-    "material",
-    `material-${category}.ts`,
-  );
   writeFileSync(outputPath, lines.join("\n"), "utf-8");
-  console.log(`Generated material-${category}.ts  (${count} icons)`);
-  generatedCategories.push(category);
-  totalIcons += count;
-}
+  console.log(`Generated src/material/${outputFileName} (${symbols.length} icons)`);
 
-// ---------------------------------------------------------------------------
-// Rewrite src/index.ts
-// ---------------------------------------------------------------------------
-const indexLines = generatedCategories.map(
-  (cat) => `export * from "./material/material-${cat}";`,
-);
-indexLines.push(`import "./font.scss";`);
-indexLines.push(``);
+  for (const file of readdirSync(materialDir)) {
+    if (file.endsWith(".ts") && file !== outputFileName) {
+      unlinkSync(join(materialDir, file));
+      console.log(`Removed stale file: src/material/${file}`);
+    }
+  }
 
-const indexPath = join(rootDir, "src", "index.ts");
-writeFileSync(indexPath, indexLines.join("\n"), "utf-8");
-console.log(`\nUpdated src/index.ts (${generatedCategories.length} categories)`);
+  writeFileSync(
+    indexPath,
+    [
+      `export * from "./material/${outputFileName.replace(/\.ts$/, "")}";`,
+      `import "./font.scss";`,
+      "",
+    ].join("\n"),
+    "utf-8",
+  );
+  console.log("Updated src/index.ts");
 
-// ---------------------------------------------------------------------------
-// Summary
-// ---------------------------------------------------------------------------
-console.log(`\nDone.`);
-console.log(`  Icons generated : ${totalIcons}`);
-if (totalSkipped > 0) {
-  console.log(`  Icons skipped   : ${totalSkipped}`);
+  writeFileSync(
+    trialsPath,
+    [
+      `import * as materialSymbolsRounded from "./material/${outputFileName.replace(/\.ts$/, "")}";`,
+      "",
+      "const icons = {",
+      `  "Material Symbols Rounded": materialSymbolsRounded,`,
+      `} as { [key: string]: { [key: string]: () => SVGSVGElement } };`,
+      "",
+      "for (const category in icons) {",
+      "  document.body.appendChild(document.createElement(\"h1\")).textContent =",
+      "    category;",
+      "  const button = document.body.appendChild(document.createElement(\"button\"));",
+      '  button.textContent = "Generate";',
+      "  const icons_div = document.body.appendChild(document.createElement(\"div\"));",
+      "  button.addEventListener(\"click\", () => {",
+      "    for (const icon in icons[category]) {",
+      "      icons_div.appendChild(icons[category][icon]());",
+      "    }",
+      "  });",
+      "}",
+      "",
+    ].join("\n"),
+    "utf-8",
+  );
+  console.log("Updated src/trials.ts");
+
+  console.log("\nDone.");
+  console.log(`  Icons generated : ${symbols.length}`);
+} finally {
+  if (existsSync(tmpCloneDir)) {
+    rmSync(tmpCloneDir, { recursive: true, force: true });
+  }
 }

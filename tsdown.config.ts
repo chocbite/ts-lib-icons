@@ -4,7 +4,8 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   banner: { js: "import './style.css';" },
-  sourcemap: "inline",
+  sourcemap: false,
+  minify: true,
   plugins: [
     {
       name: "inline-woff2",

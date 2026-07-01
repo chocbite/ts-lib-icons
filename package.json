@@ -10,7 +10,7 @@
   "types": "./dist/index.d.mts",
   "style": "./dist/style.css",
   "repository": {
-    "url": "git+https://github.com/chocbite/ts-lib-icons.git",
+    "url": "git+https://forgejo.nsns.dk/chocbite/ts-lib-icons.git",
     "type": "git"
   },
   "publishConfig": {
